@@ -1,7 +1,7 @@
 # pyCARPool
 
-Repository that provides a custom class and methods to use the CARPool method from [Chartier et al. (2020)](https://arxiv.org/abs/2009.08970).
-The examples repository 
+Repository that provides a custom class and functions to use the CARPool method from [Chartier et al. (2020)](https://arxiv.org/abs/2009.08970).
+The 'examples/' repository contains scripts allowing to reproduce results from the paper. 
 
 ## Requirements
 
@@ -13,6 +13,7 @@ The examples repository
 
 ## Installation
 In terminal, go to the project folder and run
+
 `python setup.py install`
 
 ## Usage
