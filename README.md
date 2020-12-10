@@ -24,17 +24,16 @@ First, it is advised to import the module as below for simplicity:
 ```
 from pyCARPool import CARPool, confidenceInt, CARPoolSamples, CARPoolEstimator
 ```
+The goal is to compute an unbiased estimate of a parameter vector with much lower variance than the samples mean of costly simulations. For that, we use surrogate samples paired with the simulation ones.
+Beforehand, order your data so that you have two numpy arrays of shape (P,N), with P the dimension of the samples (ex: number of Power spectrum bins) and N the number of realizations, ordered in a way that each column of the surrogate and simulation data correspond to the same random seed. 
+You also need to provide an estimate of the surrogate mean as an array of shape (P,) from an other set of surrogate ralizations.
 
-Test eq
-<img src="https://render.githubusercontent.com/render/math?math=e^{i \pi} = -1">
 
-### Description
+### Compute single estimates
 
-Put some equations here to explain the method
 
-### Examples
+### Test mode: investigate the performance of CARPool
 
 Put examples of functions and class usage here
-
 
 ## Important Remarks
