@@ -14,9 +14,8 @@ The 'examples/' repository contains scripts allowing to reproduce results from t
 ## Installation
 In terminal, go to the project folder and run
 
-`cd pyCARPool
-
-python setup.py install`
+    cd pyCARPool/
+    python setup.py install
 
 ## Usage
 
@@ -25,6 +24,9 @@ First, it is advised to import the module as below for simplicity:
 ```
 from pyCARPool import CARPool, confidenceInt, CARPoolSamples, CARPoolEstimator
 ```
+
+Test eq
+<img src="https://render.githubusercontent.com/render/math?math=e^{i \pi} = -1">
 
 ### Description
 
