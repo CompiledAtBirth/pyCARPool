@@ -14,6 +14,7 @@ The 'examples/' repository contains scripts allowing to reproduce results from t
 ## Installation
 In terminal, go to the project folder and run
 
+`cd pyCARPool`
 `python setup.py install`
 
 ## Usage
