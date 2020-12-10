@@ -15,7 +15,7 @@ import warnings
 
 # Custom functions
 import tools_examplePk as toolsPk
-from pyCARPool import CARPool, confidenceInt, CARPoolSamples, CARPoolEstimator
+from pyCARPool import CARPool, confidenceInt
 
 #%% I) GADGET N-body raw data
 
@@ -108,7 +108,7 @@ nCV = 5
 indTest = int(nCV/pkStep) - 1
 betaMat = np.diag(testFix.betaList[indTest])
 
-# Additional (co)variance brought by the estimation of muC
+# Additional (co)variance brought by the estimation of muC (equation 12 in 2009.08970)
 SigmaBetaAdd = np.linalg.multi_dot([betaMat, SigmaMuC, betaMat.T]) * 1.0/len(seeds_muC)
 stdBetaAdd = np.sqrt(np.diag(SigmaBetaAdd, k = 0))
 

@@ -49,8 +49,6 @@ class CARPool:
         
         Ntot = max([self.simData.shape[1], self.surrData.shape[1]])
         Nmax = Ntot if Nmax > Ntot else Nmax
-        P = self.simData.shape[0]
-        Q = self.surrData.shape[0]
         
         errMessage = " Number of samples asked for is too large: Nmax = %i"%Nmax
         if N4Est > Nmax:
@@ -63,7 +61,7 @@ class CARPool:
             Nsamples = N4Est
             nTests = math.floor(Nmax/N4Est)
     
-        return self.CARPoolTest(name, p, q, P, Q, Nsamples, nTests, Incremental)
+        return self.CARPoolTest(name, p, q, self.P, self.Q, Nsamples, nTests, Incremental)
     
     def appendTest(self, test):
         self.testList.append(test)
@@ -74,6 +72,8 @@ class CARPool:
         def __init__(self, testName, p, q, P, Q, Nsamples, nTests, Incremental):
             
             self.testName = testName
+            self.P = P
+            self.Q = Q
             self.p = 1 if p > P else p
             self.q = 1 if q > Q else q
             self.Nsamples = Nsamples
@@ -86,23 +86,26 @@ class CARPool:
             self.p = 1
             self.q = 1
             
-        # Default function for the "cauldron" parameter - to be used for future work - is identity.    
+        def set_Multivariate(self):
+            self.p = self.P
+            self.q = self.Q
+         
+        # The default value of "cauldron" input is the identity function   
         identity  = lambda X: X
-                        
+        
+        # MAIN METHOD: the reason for the class to exist
         def computeTest(self, simData, surrData, muSurr, methodCI = "None", alpha = 5, B = 1000, cauldron = identity):
             
             strStart = "INCREMENTAL" if self.Incremental == True else "FIXED"
             print("STARTING CARPool %s TEST"%strStart)
             
-            # Initialize structures hosting results
-            P = simData.shape[0]
-            Q = surrData.shape[0]
-            self.muCARPool = np.zeros((P, self.nTests), dtype = np.float)
+            # Initialize the attributes hosting results
+            self.muCARPool = np.zeros((self.P, self.nTests), dtype = np.float)
             self.betaList = []
             
             if methodCI != "None":
-                self.lowCARPoolCI = np.zeros((P, self.nTests), dtype = np.float)
-                self.upCARPoolCI = np.zeros((P, self.nTests), dtype = np.float)
+                self.lowCARPoolCI = np.zeros((self.P, self.nTests), dtype = np.float)
+                self.upCARPoolCI = np.zeros((self.P, self.nTests), dtype = np.float)
                 
             # Proceed to estimation ; framework depends on the integers p and q
             
@@ -125,8 +128,7 @@ class CARPool:
                     surrSamples = cauldron(surrData[:,indStart:indEnd].copy())
                     
                     # Here beta is a 1D array of floats
-                    beta = uvCARPool_Beta(simSamples, surrSamples, 
-                                              self.smDict)
+                    beta = uvCARPool_Beta(simSamples, surrSamples, self.smDict)
                     self.betaList.append(beta)
                     
                     empSim = np.mean(simSamples, axis = 1)
@@ -141,7 +143,7 @@ class CARPool:
                         lowCI, upCI = uvCARPool_CI(simSamples, surrSamples, 
                                                             muSurr, beta, methodCI, alpha, B)
                         
-                        print("Test %i done"%k)
+                        print("CIs for test %i over %i finished"%(k+1, self.nTests))
                         self.lowCARPoolCI[:,k] = lowCI
                         self.upCARPoolCI[:,k] = upCI
                             
@@ -167,8 +169,7 @@ class CARPool:
                     surrSamples = cauldron(surrData[:,indStart:indEnd].copy())
                         
                     # Here beta is a 1D array of floats
-                    muX, beta = hbCARPool_Est(simSamples, surrSamples,
-                    muSurr, self.q)
+                    muX, beta = hbCARPool_Est(simSamples, surrSamples, muSurr, self.q)
                     
                     self.betaList.append(beta)
                     self.muCARPool[:,k] = muX
@@ -178,7 +179,7 @@ class CARPool:
                         lowCI, upCI = hbCARPool_CI(simSamples, surrSamples,
                         muSurr, self.q, beta, methodCI, alpha, B)
                         
-                        print("Test %i done"%k)
+                        print("CIs for test %i over %i finished"%(k+1, self.nTests))
                         self.lowCARPoolCI[:,k] = lowCI
                         self.upCARPoolCI[:,k] = upCI
                         
@@ -186,7 +187,7 @@ class CARPool:
                         pass
                     
             # Multivariate framework        
-            elif  self.p == P and self.q == Q:
+            elif  self.p == self.P and self.q == self.Q:
                 
                 print("MULTIVARIATE ESTIMATION")
                 
@@ -217,7 +218,7 @@ class CARPool:
                         lowCI, upCI = mvCARPool_CI(simSamples, surrSamples,
                         muSurr, beta, methodCI, alpha, B)
                         
-                        print("Test %i done"%k)
+                        print("CIs for test %i over %i finished"%(k+1, self.nTests))
                         self.lowCARPoolCI[:,k] = lowCI
                         self.upCARPoolCI[:,k] = upCI
                         
@@ -258,12 +259,10 @@ def crossCovUni(Y, C):
     Function for cross covariance, p = q = 1
     Parameters
     ----------
-    N is the number of sample
     Y : Numpy array of shape (P,N)
     C : Numpy array of shape (P,N) (P=Q)
-    correction : Divisor of the estimator is N - correction
-
-    Returns the (P, 1) array of cross-covariances  between each variable of Y and Y
+    
+    Returns the (P, 1) array of cross-covariances between each element of Y and C
     '''
     covYC = 0.0
     muY = np.mean(Y, axis = 1)
@@ -609,13 +608,21 @@ def confidenceInt(dataSamples, method, alpha, B = 1000, progress = False):
 
 #%% Other handy functions, accessible outside of the class in the package
 
+# The default value of "cauldron" input is the identity function   
+def identity(X):
+    return X
+
 # Compute a single CARPool estimate with samples provided as inputs
-def CARPoolEstimator(simData, surrData, muSurr, p, q, smDict = None):
+def CARPoolEstimator(simData, surrData, muSurr, p, q, smDict = None, cauldron = identity):
     
-    P = simData.shape[0]
-    Q = surrData.shape[0]
-    empSim = np.mean(simData, axis = 1)
-    empSurr = np.mean(surrData, axis = 1)
+    simSamples = cauldron(simData)
+    surrSamples = cauldron(surrData)
+    
+    P = simSamples.shape[0]
+    Q = surrSamples.shape[0]
+    
+    empSim = np.mean(simSamples, axis = 1)
+    empSurr = np.mean(surrSamples, axis = 1)
     
     print("CARPool estimate with p = %i and q = %i"%(p, q))
     
@@ -625,17 +632,17 @@ def CARPoolEstimator(simData, surrData, muSurr, p, q, smDict = None):
         # Same smDict by default as the CARPoolTest class
         if smDict == None:
              smDict = {"smBool": False,"wtype":"flat", "wlen": 5, "indSm":None}
-        beta = uvCARPool_Beta(simData, surrData, smDict)       
+        beta = uvCARPool_Beta(simSamples, surrSamples, smDict)       
         muX = uvCARPool_Mu(empSim, empSurr, muSurr, beta)
         
     elif p == 1 and q > 1:
         
         assert P == Q, "P and Q must be the same for this framework"
-        muX, beta = hbCARPool_Est(simData, surrData, muSurr, q)
+        muX, beta = hbCARPool_Est(simSamples, surrSamples, muSurr, q)
         
     elif p == P and q == Q:
         
-        beta = mvCARPool_Beta(simData, surrData)
+        beta = mvCARPool_Beta(simSamples, surrSamples)
         muX = mvCARPool_Mu(empSim,empSurr, muSurr, beta)
         
     else:   
