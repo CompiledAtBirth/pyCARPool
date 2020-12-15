@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="pyCARPool",
-    version="0.1.2",
+    version="0.1.3",
     author="Nicolas Chartier",
     author_email="nicolas.chartier412@gmail.com",
     description="Provides custom class and functions to implement CARPool estimates, stemming from the control variates principle (arXiv 2009.08970)",

@@ -19,13 +19,8 @@ class CARPool:
     def __init__(self, description, simData, surrData, simTruth = None):
         
         self.description = description
-        
         self.simData = simData
-        self.P = simData.shape[0]
-        
         self.surrData = surrData
-        self.Q = simData.shape[0]
-        
         self.simTruth = simTruth
         
         # Append instances of the CARPoolTest class here
@@ -45,8 +40,10 @@ class CARPool:
             errMessage="The surrogate mean must have the same vector size as the surrogate samples"
             raise ValueError(errMessage)
             
-    def createTest(self, name, N4Est, Nmax, p, q, Incremental = True):
+    def createTest(self, name, N4Est, Nmax, p, q, Incremental = True, verbose = True):
         
+        P = self.simData.shape[0]
+        Q = self.surrData.shape[0]
         Ntot = max([self.simData.shape[1], self.surrData.shape[1]])
         Nmax = Ntot if Nmax > Ntot else Nmax
         
@@ -61,15 +58,14 @@ class CARPool:
             Nsamples = N4Est
             nTests = math.floor(Nmax/N4Est)
     
-        return self.CARPoolTest(name, p, q, self.P, self.Q, Nsamples, nTests, Incremental)
+        return self.CARPoolTest(name, p, q, P, Q, Nsamples, nTests, Incremental, verbose)
     
     def appendTest(self, test):
         self.testList.append(test)
-     
     
     class CARPoolTest:
         
-        def __init__(self, testName, p, q, P, Q, Nsamples, nTests, Incremental):
+        def __init__(self, testName, p, q, P, Q, Nsamples, nTests, Incremental, verbose):
             
             self.testName = testName
             self.P = P
@@ -78,7 +74,8 @@ class CARPool:
             self.q = 1 if q > Q else q
             self.Nsamples = Nsamples
             self.nTests = nTests
-            self.Incremental = Incremental #to comment for explanations
+            self.Incremental = Incremental
+            self.verbose = verbose
             
             self.smDict = {"smBool": False,"wtype":"flat", "wlen": 5, "indSm":None}
                     
@@ -89,30 +86,29 @@ class CARPool:
         def set_Multivariate(self):
             self.p = self.P
             self.q = self.Q
-         
-        # The default value of "cauldron" input is the identity function   
-        identity  = lambda X: X
         
         # MAIN METHOD: the reason for the class to exist
-        def computeTest(self, simData, surrData, muSurr, methodCI = "None", alpha = 5, B = 1000, cauldron = identity):
+        def computeTest(self, simData, surrData, muSurr, methodCI = "None", alpha = 5, B = 1000):
+            
+            testprint = print if self.verbose else lambda *a, **k: None
             
             strStart = "INCREMENTAL" if self.Incremental == True else "FIXED"
-            print("STARTING CARPool %s TEST"%strStart)
+            testprint("STARTING CARPool, %s TEST"%strStart)
             
             # Initialize the attributes hosting results
             self.muCARPool = np.zeros((self.P, self.nTests), dtype = np.float)
             self.betaList = []
             
             if methodCI != "None":
-                self.lowCARPoolCI = np.zeros((self.P, self.nTests), dtype = np.float)
-                self.upCARPoolCI = np.zeros((self.P, self.nTests), dtype = np.float)
+                self.lowMeanCI = np.zeros((self.P, self.nTests), dtype = np.float)
+                self.upMeanCI = np.zeros((self.P, self.nTests), dtype = np.float)
                 
             # Proceed to estimation ; framework depends on the integers p and q
             
             # Univariate framework
             if self.p == 1 and self.q == 1:
                 
-                print("UNIVARIATE ESTIMATION")
+                testprint("UNIVARIATE ESTIMATION")
                 
                 for k in range(self.nTests):
                     
@@ -124,8 +120,8 @@ class CARPool:
                         indEnd = (k + 1) * self.Nsamples
                     
                     # np.ndarray.copy() produces a deep copy (necessary if cauldron != identity)
-                    simSamples = cauldron(simData[:,indStart:indEnd].copy())
-                    surrSamples = cauldron(surrData[:,indStart:indEnd].copy())
+                    simSamples = simData[:,indStart:indEnd].copy()
+                    surrSamples = surrData[:,indStart:indEnd].copy()
                     
                     # Here beta is a 1D array of floats
                     beta = uvCARPool_Beta(simSamples, surrSamples, self.smDict)
@@ -143,17 +139,14 @@ class CARPool:
                         lowCI, upCI = uvCARPool_CI(simSamples, surrSamples, 
                                                             muSurr, beta, methodCI, alpha, B)
                         
-                        print("CIs for test %i over %i finished"%(k+1, self.nTests))
-                        self.lowCARPoolCI[:,k] = lowCI
-                        self.upCARPoolCI[:,k] = upCI
-                            
-                    else:
-                        pass
+                        testprint("CIs for test %i over %i finished"%(k+1, self.nTests))
+                        self.lowMeanCI[:,k] = lowCI
+                        self.upMeanCI[:,k] = upCI
              
             # Hybrid framework
             elif self.p == 1 and self.q > 1:
                 
-                print("HYBRID ESTIMATION")
+                testprint("HYBRID ESTIMATION")
                 
                 for k in range(self.nTests):
                     
@@ -165,8 +158,8 @@ class CARPool:
                         indEnd = (k + 1) * self.Nsamples
                     
                     # np.ndarray.copy() produces a deep copy (necessary if cauldron != identity)
-                    simSamples = cauldron(simData[:,indStart:indEnd].copy())
-                    surrSamples = cauldron(surrData[:,indStart:indEnd].copy())
+                    simSamples = simData[:,indStart:indEnd].copy()
+                    surrSamples = surrData[:,indStart:indEnd].copy()
                         
                     # Here beta is a 1D array of floats
                     muX, beta = hbCARPool_Est(simSamples, surrSamples, muSurr, self.q)
@@ -179,17 +172,14 @@ class CARPool:
                         lowCI, upCI = hbCARPool_CI(simSamples, surrSamples,
                         muSurr, self.q, beta, methodCI, alpha, B)
                         
-                        print("CIs for test %i over %i finished"%(k+1, self.nTests))
-                        self.lowCARPoolCI[:,k] = lowCI
-                        self.upCARPoolCI[:,k] = upCI
-                        
-                    else:
-                        pass
+                        testprint("CIs for test %i over %i finished"%(k+1, self.nTests))
+                        self.lowMeanCI[:,k] = lowCI
+                        self.upMeanCI[:,k] = upCI
                     
             # Multivariate framework        
             elif  self.p == self.P and self.q == self.Q:
                 
-                print("MULTIVARIATE ESTIMATION")
+                testprint("MULTIVARIATE ESTIMATION")
                 
                 for k in range(self.nTests):
                     
@@ -201,8 +191,8 @@ class CARPool:
                         indEnd = (k + 1) * self.Nsamples
                         
                     # np.ndarray.copy() produces a deep copy (necessary if cauldron != identity)
-                    simSamples = cauldron(simData[:,indStart:indEnd].copy())
-                    surrSamples = cauldron(surrData[:,indStart:indEnd].copy())
+                    simSamples = simData[:,indStart:indEnd].copy()
+                    surrSamples = surrData[:,indStart:indEnd].copy()
                     
                     beta = mvCARPool_Beta(simSamples, surrSamples)
                     self.betaList.append(beta)
@@ -218,20 +208,17 @@ class CARPool:
                         lowCI, upCI = mvCARPool_CI(simSamples, surrSamples,
                         muSurr, beta, methodCI, alpha, B)
                         
-                        print("CIs for test %i over %i finished"%(k+1, self.nTests))
-                        self.lowCARPoolCI[:,k] = lowCI
-                        self.upCARPoolCI[:,k] = upCI
-                        
-                    else:
-                        pass
-                    
-            print("TEST FINISHED")
+                        testprint("CIs for test %i over %i finished"%(k+1, self.nTests))
+                        self.lowMeanCI[:,k] = lowCI
+                        self.upMeanCI[:,k] = upCI
+
+            testprint("TEST FINISHED")
         
         # Compute the variance of CARPool samples by generating them with a list if control matrices
-        def varianceAnalysis(self, simSamples, surrSamples, muSurr, safeguard = 1.0):
+        def varianceAnalysis(self, simSamples, surrSamples, muSurr):
             
             if self.nTests != len(self.betaList):
-                print("The number of beta matrixes is not the same as nTests. Check consistency")                
+                print("The number of beta matrices is not the same as nTests. Check consistency")                
             
             logdetXX = np.zeros((self.nTests,), dtype = np.float)
             signXX = np.zeros((self.nTests,), dtype = np.float)
@@ -246,8 +233,155 @@ class CARPool:
                 logdetXX[k] = logdet
                 sigma2XX[:,k] = np.diag(sigmaXX)
                 
-            return sigma2XX, logdetXX, signXX            
+            return sigma2XX, logdetXX, signXX
+        
+        # FOR COVARIANCE: CODING IN PROCESS
+        def computeTest_Cov(self, simData, surrData, covSurr, standardVec = True, corrBias = True, methodCI = "None", 
+                            alpha = 5, B = 1000):
+            '''
+            
+
+            Parameters
+            ----------
+            simData : TYPE
+                DESCRIPTION.
+            surrData : TYPE
+                DESCRIPTION.
+            covSurr : TYPE
+                DESCRIPTION.
+            standardVec : TYPE, optional
+                DESCRIPTION. The default is True.
+            corrBias : TYPE, optional
+                DESCRIPTION. The default is True.
+            methodCI : TYPE, optional
+                DESCRIPTION. The default is "None".
+            alpha : TYPE, optional
+                DESCRIPTION. The default is 5.
+            B : TYPE, optional
+                DESCRIPTION. The default is 1000.
+
+            Raises
+            ------
+            ValueError
+                DESCRIPTION.
+
+            Returns
+            -------
+            None.
+
+            '''
+            
+            S = int(self.P*(self.P + 1)/2)
+            self.PSDBool = [] # list of booleans for positive semi-definiteness test
+            
+            # Set functions that differ given the arguments
+            testprint = print if self.verbose else lambda *a, **k: None
+            vectorize = vectorizeSymMat if standardVec else customVectorizeSymMat
+            reconstruct = reconstructSymMat if standardVec else customReconstructSymMat
+            
+            # reconstruct must be available to the user to visualize the data
+            self.reconstructSymMat = reconstruct
+            
+            strStart = "INCREMENTAL" if self.Incremental == True else "FIXED"
+            testprint("STARTING CARPool COVARIANCE, %s TEST"%strStart)
+            
+            # Initialize the attributes hosting results
+            self.covCARPool = np.zeros((S, self.nTests), dtype = np.float)
+
+            if methodCI != "None":
+                self.lowCovCI = np.zeros((S, self.nTests), dtype = np.float)
+                self.upCovCI = np.zeros((S, self.nTests), dtype = np.float)
                 
+            if covSurr.shape != (self.P, self.P):
+                raise ValueError("The surrogate covariance has not the correct shape")
+            
+            # Arrange the lower triangular part the of the surrogate covariance into a vector
+            vectMuC = vectorize(covSurr)
+
+            # Univariate framework
+            if self.p == 1 and self.q == 1:
+                
+                print("UNIVARIATE ESTIMATION")
+                
+                for k in range(self.nTests):
+                    
+                    if self.Incremental == True:
+                        indStart = 0
+                        indEnd = self.Nsamples[k] # Nsmaples is an array of integers
+                        N = self.Nsamples[k]
+                    else:
+                        indStart = k * self.Nsamples # Nsamples is a single integer
+                        indEnd = (k + 1) * self.Nsamples
+                        N = self.Nsamples
+                    
+                    corr = N/(N-1.0) if corrBias else 1.0
+                    
+                    # np.ndarray.copy() produces a deep copy (necessary if cauldron != identity)
+                    simSamples = vectOuterProd(centeredData(simData[:,indStart:indEnd]),standardVec)
+                    surrSamples = vectOuterProd(centeredData(surrData[:,indStart:indEnd]), standardVec)
+                    
+                    # Here beta is a 1D array of floats
+                    beta = uvCARPool_Beta(simSamples, surrSamples, self.smDict)
+                    
+                    empSim = np.mean(simSamples, axis = 1)
+                    empSurr = np.mean(surrSamples, axis = 1)
+                    
+                    muX = corr * uvCARPool_Mu(empSim, empSurr, vectMuC, beta)
+                    self.covCARPool[:,k] = muX
+                    
+                    psd = is_PSD(reconstruct(muX))
+                    self.PSDBool.append(psd)
+                    
+                    # Estimate confidence intervals of estimated means if required
+                    if methodCI != "None":
+                        
+                        lowCI, upCI = uvCARPool_CI(simSamples, surrSamples, 
+                                                            vectMuC, beta, methodCI, alpha, B)
+                        
+                        testprint("CIs for test %i over %i finished"%(k + 1, self.nTests))
+                        self.lowCovCI[:,k] = corr * lowCI
+                        self.upCovCI[:,k] = corr * upCI
+                        
+            # Hybrid framework
+            if self.p == 1 and self.q > 1:
+                
+                print("UNIVARIATE ESTIMATION")
+                
+                for k in range(self.nTests):
+                    
+                    if self.Incremental == True:
+                        indStart = 0
+                        indEnd = self.Nsamples[k] # Nsmaples is an array of integers
+                        N = self.Nsamples[k]
+                    else:
+                        indStart = k * self.Nsamples # Nsamples is a single integer
+                        indEnd = (k + 1) * self.Nsamples
+                        N = self.Nsamples
+                    
+                    corr = N/(N-1.0) if corrBias else 1.0
+                    
+                    # np.ndarray.copy() produces a deep copy (necessary if cauldron != identity)
+                    simSamples = vectOuterProd(centeredData(simData[:,indStart:indEnd]),standardVec)
+                    surrSamples = vectOuterProd(centeredData(surrData[:,indStart:indEnd]),standardVec)
+                    
+                    # Here beta is a 1D array of floats
+                    muX, beta = hbCARPool_Est(simSamples, surrSamples, vectMuC, self.q)
+                    
+                    self.covCARPool[:,k] = corr * muX
+                    
+                    psd = is_PSD(reconstruct(muX))
+                    self.PSDBool.append(psd)
+                    
+                    if methodCI != "None":
+                        
+                        lowCI, upCI = hbCARPool_CI(simSamples, surrSamples,
+                        vectMuC, self.q, beta, methodCI, alpha, B)
+                        
+                        testprint("CIs for test %i over %i finished"%(k + 1, self.nTests))
+                        self.lowCovCI[:,k] = corr * lowCI
+                        self.upCovCI[:,k] = corr * upCI
+             
+            testprint("TEST FINISHED FOR COVARIANCE")
 #%% ESTIMATION TOOLS
 
 ########################
@@ -297,8 +431,6 @@ def uvCARPool_Beta(simSamples, surrSamples, smDict):
 def uvCARPool_Mu(empSim, empSurr, muSurr,beta):
     
     betaMat = np.diag(beta) # because we are in the p = q = 1 framework
-    
-    # It's easier to treat beta as a diagonal matrix than to do a loop
     muCARP = empSim - np.matmul(betaMat, empSurr - muSurr)
     
     return muCARP
@@ -373,10 +505,13 @@ def hbCARPool_Est(simSamples, surrSamples, muSurr, q):
     shift = math.floor(q/2) # math.floor gives an int
     nBins = simSamples.shape[0]
     
-    betaLength = nBins * q - 2 * shift
+    # WRONG!
+    #betaLength = nBins * q - 2 * shift
+    #betaAgg = np.zeros((betaLength,), dtype = np.float)
     
-    betaAgg = np.zeros((betaLength,), dtype = np.float)
+    # init
     xMu = np.zeros((nBins,), dtype = np.float)
+    betaAgg = np.array([], dtype = np.float)
     
     for n in range(nBins):
         
@@ -388,14 +523,16 @@ def hbCARPool_Est(simSamples, surrSamples, muSurr, q):
         yVar = simSamples[n,:]
         cSub = surrSamples[cStart:cEnd,:]
         
-        beta = hbCARPool_beta(yVar, cSub)
-        
-        bStart = n * q - 1 if n > 0 else 0
-        bEnd = (n + 1) * q - 1 if n < nBins - 1 else betaLength
-        betaAgg[bStart:bEnd] = beta
-        
         yMu = np.mean(yVar)
         cMu = np.mean(cSub, axis = 1)
+        
+        beta = hbCARPool_beta(yVar, cSub)
+        betaAgg = np.append(betaAgg, beta)
+        
+        # WRONG!
+        # bStart = n * q - 1 if n > 0 else 0
+        # bEnd = (n + 1) * q - 1 if n < nBins - 1 else betaLength
+        #betaAgg[bStart:bEnd] = beta
         
         xMu[n] = yMu - np.matmul(beta, cMu - muSurr[cStart:cEnd])
         
@@ -406,11 +543,10 @@ def hbCARPool_CI(simSamples, surrSamples, muSurr, q, beta, method, alpha, B):
     shift = math.floor(q/2)
     nBins = simSamples.shape[0]
     
-    betaLength = nBins * q - 2 * shift
-    
-    assert betaLength == beta.shape[0], "debug hybrid beta computation"
-    
+    # init    
     xColl = np.zeros((nBins, simSamples.shape[1]), dtype = np.float)
+    bStart = 0
+    bEnd = 0
     
     for n in range(nBins):
         
@@ -419,15 +555,14 @@ def hbCARPool_CI(simSamples, surrSamples, muSurr, q, beta, method, alpha, B):
         cStart = a if a >= 0 else 0
         cEnd = b + 1 if b + 1 < nBins else nBins
         
-        bStart = n * q - 1 if n > 0 else 0
-        bEnd = (n + 1) * q - 1 if n < nBins - 1 else betaLength
-        
+        # Take out the appropriate beta vector
+        bStart = bEnd
+        bEnd += cEnd - cStart
         betaMat = beta[bStart:bEnd]
         
         xColl[n,:] = simSamples[n,:] - np.matmul(betaMat, surrSamples[cStart:cEnd,:] - muSurr[cStart:cEnd, np.newaxis])
         
-    lowCI, upCI = confidenceInt(xColl, method, alpha, B)
-    
+    lowCI, upCI = confidenceInt(xColl, method, alpha, B)  
     
     return lowCI, upCI
     
@@ -516,7 +651,7 @@ def tscoreCI(scalarRV, alpha):
                                    scale = stats.sem(scalarRV, ddof = 1))
     
     # Equivalent code
-    # t = stats.t.ppf(1.0 - 0.5*alpha/100, df)   # t-critical value for 95% CI
+    # t = stats.t.ppf(1.0 - 0.5*alpha/100, df)   # t-critical value for quantile alpha/2.0
     # s = np.std(scalarRV, ddof=1)   # empirical standard deviation, with ddof = 1 for the unbiased estimator
     # lowT = np.mean(scalarRV) - (t * s / np.sqrt(N))
     # upT = np.mean(scalarRV) + (t * s / np.sqrt(N))
@@ -613,7 +748,7 @@ def identity(X):
     return X
 
 # Compute a single CARPool estimate with samples provided as inputs
-def CARPoolEstimator(simData, surrData, muSurr, p, q, smDict = None, cauldron = identity):
+def CARPoolMu(simData, surrData, muSurr, p, q, smDict = None, cauldron = identity):
     
     simSamples = cauldron(simData)
     surrSamples = cauldron(surrData)
@@ -736,3 +871,123 @@ def smooth1D(sigArr, window_len, window):
     y = signal.convolve(s, w, mode='same')/np.sum(w)
     out = y[padd:padd+n]
     return out
+
+#%% SPECIFIC FUNCTIONS FOR COVARIANCE ESTIMATION (UNFINISHED, DO NOT USE)
+
+# Returns centered vector by their empirical mean
+def centeredData(dataMat):
+    
+    P = dataMat.shape[0]
+      
+    muData = np.mean(dataMat, axis = 1)
+    centeredMat = dataMat - np.reshape(muData,(P,1)) # substract to each column
+
+    return centeredMat
+
+# Returns the P(P+1)/2 unique elements of the outer product of smaples as vectors
+def vectOuterProd(dataMat, standardVec):
+    
+    P = dataMat.shape[0]
+    N = dataMat.shape[1]
+    S = int(P*(P+1)/2)
+    
+    # Initialisation
+    outerProdArr = np.zeros((S, N), dtype = np.float)
+    vectorize = vectorizeSymMat if standardVec else customVectorizeSymMat
+    
+    for n in range(N):
+        outProd = np.outer(dataMat[:,n], dataMat[:,n])
+        outerProdArr[:,n] = vectorize(outProd)
+
+    return outerProdArr
+
+# FUNC : returns a N(N+1)/2 elements vector of a N*N symmetric matrix    
+def vectorizeSymMat(symMatrix):
+    '''
+    Parameters
+    ----------
+    symMatrix : symmetric matrix (numpy array)
+
+    Returns
+    -------
+    vectSym : N(N+1)/2 array of the unique elements of SymMatrix 
+
+    '''
+    P = symMatrix.shape[0]
+    low_indices = np.tril_indices(P, k = 0)
+    
+    return symMatrix[low_indices]
+
+def reconstructSymMat(vectSym):
+    '''
+    Reconstruct covariance matrix from vectorized lower triangular matrix of length S
+    We want to reconstruct a N*N matrix with S = (N*(N+1))/2
+    Given the integer S>=1, the 2nd order polynomial N^2 + N - 2 * S has always one positive and one negative root
+    '''
+    S = vectSym.shape[0]
+    sols = np.roots([1.0, 1.0, -2.0 * S])
+    P = int(sols[np.where(sols>0)]) # we take the positive root of course
+    
+    indLow = np.tril_indices(P, k = 0)
+    symMat = np.zeros((P,P), dtype = np.float)
+    
+    symMat[indLow] = vectSym
+    symMat = symMat + symMat.T - np.diag(symMat.diagonal())
+    
+    return symMat
+
+def customTrilIndices(trilIndices, P):
+    
+    myIndices = trilIndices
+    j_ind = myIndices[1]
+    #lgth = j_ind.size
+    
+    for k in range(P):
+        if k % 2 == 0:
+            pass
+        else:
+            start  = np.sum(np.arange(1, k + 1, dtype = np.int))
+            stop   =  np.sum(np.arange(1, k + 2, dtype = np.int))
+            j_ind[start:stop] = np.flip(j_ind[start:stop])
+            
+    return myIndices
+
+def customVectorizeSymMat(symMatrix):
+    
+    P = symMatrix.shape[0]
+    low_indices = np.tril_indices(P, k = 0)
+    myIndices = customTrilIndices(low_indices,P)
+    
+    return symMatrix[myIndices]
+
+def customReconstructSymMat(vectSym):
+    
+    S = vectSym.shape[0]
+    sols = np.roots([1.0, 1.0, -2.0 * S])
+    P = int(sols[np.where(sols>0)]) # we take the positive root of course
+    
+    indLow = customTrilIndices(np.tril_indices(P, k = 0),P)
+    symMat = np.zeros((P,P), dtype = np.float)
+    
+    symMat[indLow] = vectSym
+    symMat = symMat + symMat.T - np.diag(symMat.diagonal())
+    
+    return symMat
+
+# "Normalize auto-covariance or cross-covariance matrix
+def covMat2CorrMat(covMat):
+    
+    dCov = np.diag(np.diag(covMat))
+    sigmaCov = np.sqrt(dCov)
+    sigmaInv = np.linalg.inv(sigmaCov)
+    corrMat = np.linalg.multi_dot([sigmaInv, covMat, sigmaInv])
+    
+    return corrMat
+
+# Check if a matrix is positive semi-definite
+def is_PSD(Mat):
+    return np.all(np.linalg.eigvals(Mat) >= 0)
+
+# Check if a matrix is positive definite
+def is_PD(Mat):
+    return np.all(np.linalg.eigvals(Mat) > 0)

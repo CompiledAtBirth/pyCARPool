@@ -130,16 +130,16 @@ toolsPk.plot_cvRatiosBlues(muY, nSampSim, lowY, upY, barBool, testFix.muCARPool,
                  xlog, titleBool,truth, saveBool = True, saveFold = rootRes, saveStr = "Figure3")
 
 #%% VIII) Performance for an increasing number of samples
-methodCIInc = "bootstrapBCA"
+methodCIInc = "tscore"
 NInc = 20
 
-testInc = myCARPool.createTest("Every 5 additional samples", pkStep, NInc, p, q, Incremental = True)
-testInc.smDict = {"smBool": True,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
+testInc = myCARPool.createTest("Every 5 additional samples", pkStep, NInc, p, 5, Incremental = True)
+testInc.smDict = {"smBool": False,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
 testInc.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, methodCIInc, alpha, bootCard)
 
 # Reproduce figure 2 of 2009.08970 (if methodCIInc = bootstrapBCA ; bootstrap results may slightly differ)
 # For figure B2, use methodCIInc = tscore
-nSampCARP = 5
+nSampCARP = 10
 indCV = int(nSampCARP/pkStep) - 1
 factErrInc = 20
 zoomBool = True
@@ -150,7 +150,7 @@ reducedPk = True ; powerK = 1
 tupleCor1 = (1,4)
 
 toolsPk.Comparison_errBars(muY, testInc.muCARPool[:,indCV] , k3D, nSampSim, nSampCARP, 
-                           lowY, upY, testInc.lowCARPoolCI[:,indCV], testInc.upCARPoolCI[:,indCV],
+                           lowY, upY, testInc.lowMeanCI[:,indCV], testInc.upMeanCI[:,indCV],
                        factErrInc,zoomBool, kTupleLim,zoomFact,tupleCor1, xlog, ylog, reducedPk, powerK)
 
 #%% Reproduce Figure 5 of 2009.08970
@@ -189,3 +189,35 @@ sigmaReducU =  np.sqrt(sigma2XXU[:,-1])/sigYY # actual variance reduction we ten
 sigmaReducUApp = np.sqrt(sigma2XXU[:,0])/sigYY # impact of an "improper" beta diagonal
 
 toolsPk.plotVarReduc_Cov(reducVarM, reducVarU, sigmaReducM, sigmaReducU, sigmaReducUApp ,testInc_varM.Nsamples, k3D)
+
+#%% VI) Performance with 5 samples
+q2 = 3
+testFix2 = myCARPool.createTest("Every 5 additional samples", pkStep, N, p, q2, Incremental = True)
+testFix2.smDict = {"smBool": False ,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
+testFix2.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, methodCIFix, alpha)
+
+# Reproduce Figure 3 (bottom panel) of 2009.08970
+nCV = 10
+indTest = int(nCV/pkStep) - 1
+betaMat = np.diag(testFix.betaList[indTest])
+
+# Additional (co)variance brought by the estimation of muC (equation 12 in 2009.08970)
+SigmaBetaAdd = np.linalg.multi_dot([betaMat, SigmaMuC, betaMat.T]) * 1.0/len(seeds_muC)
+stdBetaAdd = np.sqrt(np.diag(SigmaBetaAdd, k = 0))
+
+rootRes = "/home/chartier/Documents/VarianceSlayer/pyCARPool/examples/matterPk/Figures/"
+if not(os.path.exists(rootRes)):
+    os.mkdir(rootRes)
+
+barBool = True
+factErrFix = 1.0
+percBool = True
+trueBool = True
+epsilonBool = True
+boolStd = True
+xlog = True
+titleBool = False
+
+toolsPk.plot_cvRatiosBlues(muY, nSampSim, lowY, upY, barBool, testFix.muCARPool,
+                 stdBetaAdd,boolStd, pkStep, k3D, factErrFix, percBool, trueBool,
+                 xlog, titleBool,truth, saveBool = True, saveFold = rootRes, saveStr = "Figure3")
