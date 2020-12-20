@@ -127,19 +127,19 @@ titleBool = False
 
 toolsPk.plot_cvRatiosBlues(muY, nSampSim, lowY, upY, barBool, testFix.muCARPool,
                  stdBetaAdd,boolStd, pkStep, k3D, factErrFix, percBool, trueBool,
-                 xlog, titleBool,truth, saveBool = True, saveFold = rootRes, saveStr = "Figure3")
+                 xlog, titleBool,truth, saveBool = False, saveFold = rootRes, saveStr = "Figure3")
 
 #%% VIII) Performance for an increasing number of samples
 methodCIInc = "tscore"
 NInc = 20
 
-testInc = myCARPool.createTest("Every 5 additional samples", pkStep, NInc, p, 5, Incremental = True)
+testInc = myCARPool.createTest("Every 5 additional samples", pkStep, NInc, p, q, Incremental = True)
 testInc.smDict = {"smBool": False,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
 testInc.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, methodCIInc, alpha, bootCard)
 
 # Reproduce figure 2 of 2009.08970 (if methodCIInc = bootstrapBCA ; bootstrap results may slightly differ)
 # For figure B2, use methodCIInc = tscore
-nSampCARP = 10
+nSampCARP = 5
 indCV = int(nSampCARP/pkStep) - 1
 factErrInc = 20
 zoomBool = True
@@ -190,34 +190,47 @@ sigmaReducUApp = np.sqrt(sigma2XXU[:,0])/sigYY # impact of an "improper" beta di
 
 toolsPk.plotVarReduc_Cov(reducVarM, reducVarU, sigmaReducM, sigmaReducU, sigmaReducUApp ,testInc_varM.Nsamples, k3D)
 
-#%% VI) Performance with 5 samples
+#%% VI) New test with q = 3
 q2 = 3
-testFix2 = myCARPool.createTest("Every 5 additional samples", pkStep, N, p, q2, Incremental = True)
-testFix2.smDict = {"smBool": False ,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
-testFix2.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, methodCIFix, alpha)
+testInc_q2 = myCARPool.createTest("Every 5 additional samples, q = 3", pkStep, NInc2, p, q2, Incremental = True)
+testInc_q2.smDict = {"smBool": False ,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
+testInc_q2.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, methodCIInc, alpha)
 
 # Reproduce Figure 3 (bottom panel) of 2009.08970
-nCV = 10
-indTest = int(nCV/pkStep) - 1
-betaMat = np.diag(testFix.betaList[indTest])
+nCV2 = 10
+indTest2 = int(nCV2/pkStep) - 1
 
-# Additional (co)variance brought by the estimation of muC (equation 12 in 2009.08970)
-SigmaBetaAdd = np.linalg.multi_dot([betaMat, SigmaMuC, betaMat.T]) * 1.0/len(seeds_muC)
-stdBetaAdd = np.sqrt(np.diag(SigmaBetaAdd, k = 0))
+toolsPk.Comparison_errBars(muY, testInc_q2.muCARPool[:,indTest2] , k3D, nSampSim, nCV2, 
+                           lowY, upY, testInc_q2.lowMeanCI[:,indTest2], testInc_q2.upMeanCI[:,indTest2],
+                       factErrInc,zoomBool, kTupleLim,zoomFact,tupleCor1, xlog, ylog, reducedPk, powerK)
 
-rootRes = "/home/chartier/Documents/VarianceSlayer/pyCARPool/examples/matterPk/Figures/"
-if not(os.path.exists(rootRes)):
-    os.mkdir(rootRes)
+#%% VII) New test with q = 5
 
-barBool = True
-factErrFix = 1.0
-percBool = True
-trueBool = True
-epsilonBool = True
-boolStd = True
-xlog = True
-titleBool = False
+q3 = 5
+testInc_q3 = myCARPool.createTest("Every 5 additional samples, q = 5", pkStep, NInc2, p, q3, Incremental = True)
+testInc_q3.smDict = {"smBool": False ,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
+testInc_q3.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, methodCIInc, alpha)
 
-toolsPk.plot_cvRatiosBlues(muY, nSampSim, lowY, upY, barBool, testFix.muCARPool,
-                 stdBetaAdd,boolStd, pkStep, k3D, factErrFix, percBool, trueBool,
-                 xlog, titleBool,truth, saveBool = True, saveFold = rootRes, saveStr = "Figure3")
+# Reproduce Figure 3 (bottom panel) of 2009.08970
+nCV3 = 10
+indTest3 = int(nCV3/pkStep) - 1
+
+toolsPk.Comparison_errBars(muY, testInc_q3.muCARPool[:,indTest3] , k3D, nSampSim, nCV3, 
+                           lowY, upY, testInc_q3.lowMeanCI[:,indTest3], testInc_q3.upMeanCI[:,indTest3],
+                       factErrInc,zoomBool, kTupleLim,zoomFact,tupleCor1, xlog, ylog, reducedPk, powerK)
+
+#%% Extended variance analysis
+
+sigma2XXq2, logdetXXq2, signXXq2 = testInc_q2.varianceAnalysis(gadPk_varTest, colaPk_varTest, myCARPool.muSurr)
+detXXq2 = signXXq2 * np.exp(logdetXXq2)
+reducVarq2 = detXXq2/detYY
+
+sigma2XXq3, logdetXXq3, signXXq3 = testInc_q3.varianceAnalysis(gadPk_varTest, colaPk_varTest, myCARPool.muSurr)
+detXXq3 = signXXq3 * np.exp(logdetXXq3)
+reducVarq3 = detXXq3/detYY
+
+sigmaReducq2 = np.sqrt(sigma2XXq2[:,-1])/sigYY
+sigmaReducq3 =  np.sqrt(sigma2XXq3[:,-1])/sigYY
+
+toolsPk.plotVarReduc_new(reducVarM, reducVarU, reducVarq2,reducVarq3, sigmaReducM,
+                         sigmaReducU,sigmaReducq2, sigmaReducq3, testInc_q2.Nsamples, k3D, q2, q3)

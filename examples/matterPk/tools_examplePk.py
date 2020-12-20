@@ -363,3 +363,38 @@ def plotVarReduc_Cov(reducVar, reducVarDiag, sigmaReduc, sigmaReducDiag, sigmaRe
     plt.tight_layout()
     plt.grid()
     plt.show()
+    
+def plotVarReduc_new(reducVar, reducVarDiag, reducVarq, reducVarq2, sigmaReduc,
+                     sigmaReducDiag, sigmaReducq, sigmaReducq2 ,nSamplesList,k3D_binned, q, q2):
+    
+    A = plt.figure(figsize=(12,7.5))
+    plt.semilogy(nSamplesList, reducVar, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
+    plt.semilogy(nSamplesList, reducVarDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
+    plt.semilogy(nSamplesList, reducVarq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "orangered", marker = "x", markersize  = 5)
+    plt.semilogy(nSamplesList, reducVarq2, label = "CARPool q=%i"%q2, linewidth = 1.1, color = "indigo", marker = "x", markersize  = 5)
+    plt.xticks(fontsize=27, rotation = 0)
+    plt.yticks(fontsize=27, rotation = 45)
+    plt.xlabel("Number of simulation pairs", fontsize = 27, style = "italic", y = -0.1)
+    plt.ylabel(r'$\frac{det \left(  \mathbf{\Sigma_{xx}}(\mathbf{\hat{\beta}})  \right)}{det \left(  \mathbf{\Sigma_{yy}} \right)}$', 
+                        fontsize = 40, rotation = 90)
+    plt.legend(fontsize = 27, loc = "best")
+    plt.tight_layout()
+    plt.grid()
+    plt.show()
+
+    
+    #%%Plot variance ratio on diagonal only
+    
+    B = plt.figure(figsize=(12,7.5))
+    plt.loglog(k3D_binned, sigmaReduc, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
+    plt.loglog(k3D_binned, sigmaReducDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
+    plt.loglog(k3D_binned, sigmaReducq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "orangered", marker = "x", markersize  = 5)
+    plt.loglog(k3D_binned, sigmaReducq2, label = "CARPool q=%i"%q2, linewidth = 1.1, color = "indigo", marker = "x", markersize  = 5)
+    plt.xticks(fontsize=27, rotation = 0)
+    plt.yticks(fontsize=27, rotation = 45)
+    plt.xlabel(r'$k$ $[h{\rm Mpc^{-1}}]$', fontsize = 32, style = "italic", y = -0.1)
+    plt.ylabel(r"$\frac{\sigma_x}{\sigma_y}$", fontsize = 48, rotation = 0.0, labelpad = 27)
+    plt.legend(fontsize = 27, loc = "lower right")
+    plt.tight_layout()
+    plt.grid()
+    plt.show()

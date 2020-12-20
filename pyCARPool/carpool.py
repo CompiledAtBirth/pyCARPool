@@ -271,7 +271,7 @@ class CARPool:
 
             '''
             
-            S = int(self.P*(self.P + 1)/2)
+            S = int(self.P*(self.P + 1)/2) # number of unique elements in a (P,P) symmetric matrix
             self.PSDBool = [] # list of booleans for positive semi-definiteness test
             
             # Set functions that differ given the arguments
@@ -279,7 +279,8 @@ class CARPool:
             vectorize = vectorizeSymMat if standardVec else customVectorizeSymMat
             reconstruct = reconstructSymMat if standardVec else customReconstructSymMat
             
-            # reconstruct must be available to the user to visualize the data
+            # reconstruct/vectorize must be available to the user to visualize the data
+            self.vectorizeSymMat = vectorize
             self.reconstructSymMat = reconstruct
             
             strStart = "INCREMENTAL" if self.Incremental == True else "FIXED"
@@ -287,6 +288,7 @@ class CARPool:
             
             # Initialize the attributes hosting results
             self.covCARPool = np.zeros((S, self.nTests), dtype = np.float)
+            self.betaCovList = []
 
             if methodCI != "None":
                 self.lowCovCI = np.zeros((S, self.nTests), dtype = np.float)
@@ -322,6 +324,7 @@ class CARPool:
                     
                     # Here beta is a 1D array of floats
                     beta = uvCARPool_Beta(simSamples, surrSamples, self.smDict)
+                    self.betaCovList.append(beta)
                     
                     empSim = np.mean(simSamples, axis = 1)
                     empSurr = np.mean(surrSamples, axis = 1)
@@ -368,6 +371,7 @@ class CARPool:
                     muX, beta = hbCARPool_Est(simSamples, surrSamples, vectMuC, self.q)
                     
                     self.covCARPool[:,k] = corr * muX
+                    self.betaCovList.append(beta)
                     
                     psd = is_PSD(reconstruct(muX))
                     self.PSDBool.append(psd)
@@ -382,6 +386,33 @@ class CARPool:
                         self.upCovCI[:,k] = corr * upCI
              
             testprint("TEST FINISHED FOR COVARIANCE")
+            
+        def varianception(self, simData, surrData, covSurr, betaCovList, standardVec):
+            
+            if self.nTests != len(self.betaCovList):
+                print("The number of beta matrices (for covariance) is not the same as nTests. Check consistency") 
+            
+            # Set functions that differ given the arguments
+            testprint = print if self.verbose else lambda *a, **k: None
+            vectorize = vectorizeSymMat if standardVec else customVectorizeSymMat
+            
+            # np.ndarray.copy() produces a deep copy (necessary if cauldron != identity)
+            simSamples = vectOuterProd(centeredData(simData), standardVec)
+            surrSamples = vectOuterProd(centeredData(surrData),standardVec)
+            
+            # Covariance of surrogate
+            vectMuC = vectorize(covSurr)
+            
+            # Initialize results array
+            sigma2Cov = np.zeros((simSamples.shape[0], self.nTests), dtype = np.float)
+                 
+            for k in range(self.nTests):
+                
+                xColl = CARPoolSamples(simSamples, surrSamples, vectMuC, self.p, self.q, self.betaCovList[k])
+                sigma2Cov[:,k] = np.var(xColl, axis = 1, ddof = 1)
+                testprint("Variance of covariance, test %i over %i done"%(k + 1, self.nTests))
+                
+            return sigma2Cov
 #%% ESTIMATION TOOLS
 
 ########################
@@ -599,7 +630,6 @@ def mvCARPool_Mu(empSim, empSurr, muSurr, betaMat):
     muCARP = empSim - np.matmul(betaMat, empSurr - muSurr)
     
     return muCARP
-    
 
 def mvCARPool_CI(simSamples, surrSamples, muSurr, beta, method, alpha, B):
     
@@ -743,15 +773,8 @@ def confidenceInt(dataSamples, method, alpha, B = 1000, progress = False):
 
 #%% Other handy functions, accessible outside of the class in the package
 
-# The default value of "cauldron" input is the identity function   
-def identity(X):
-    return X
-
 # Compute a single CARPool estimate with samples provided as inputs
-def CARPoolMu(simData, surrData, muSurr, p, q, smDict = None, cauldron = identity):
-    
-    simSamples = cauldron(simData)
-    surrSamples = cauldron(surrData)
+def CARPoolMu(simSamples, surrSamples, muSurr, p, q, smDict = None):
     
     P = simSamples.shape[0]
     Q = surrSamples.shape[0]
@@ -797,7 +820,6 @@ def CARPoolSamples(simSamples, surrSamples, muSurr, p, q, beta):
             raise ValueError("P and Q must be the same for this framework")
             
         betaMat = np.diag(beta)
-        
         xSamples = simSamples - np.matmul(betaMat, surrSamples - muSurr[:,np.newaxis])
         
     elif p == 1 and q > 1:
@@ -808,12 +830,10 @@ def CARPoolSamples(simSamples, surrSamples, muSurr, p, q, beta):
         shift = math.floor(q/2)
         nBins = simSamples.shape[0]
         
-        betaLength = nBins * q - 2 * shift
-        
-        if betaLength != beta.shape[0]:
-            raise ValueError("beta has not the right length")
-        
+        # Initialization
         xSamples = np.zeros((nBins, simSamples.shape[1]), dtype = np.float)
+        bStart = 0
+        bEnd = 0
         
         for n in range(nBins):
             
@@ -822,9 +842,8 @@ def CARPoolSamples(simSamples, surrSamples, muSurr, p, q, beta):
             cStart = a if a >= 0 else 0
             cEnd = b + 1 if b + 1 < nBins else nBins
             
-            bStart = n * q - 1 if n > 0 else 0
-            bEnd = (n + 1) * q - 1 if n < nBins - 1 else betaLength
-            
+            bStart = bEnd
+            bEnd += cEnd - cStart
             betaMat = beta[bStart:bEnd]
             
             xSamples[n,:] = simSamples[n,:] - np.matmul(betaMat, surrSamples[cStart:cEnd,:] - muSurr[cStart:cEnd, np.newaxis])
