@@ -219,7 +219,7 @@ toolsPk.Comparison_errBars(muY, testInc_q3.muCARPool[:,indTest3] , k3D, nSampSim
                            lowY, upY, testInc_q3.lowMeanCI[:,indTest3], testInc_q3.upMeanCI[:,indTest3],
                        factErrInc,zoomBool, kTupleLim,zoomFact,tupleCor1, xlog, ylog, reducedPk, powerK)
 
-#%% Extended variance analysis
+#%% VIII) Extended variance analysis
 
 sigma2XXq2, logdetXXq2, signXXq2 = testInc_q2.varianceAnalysis(gadPk_varTest, colaPk_varTest, myCARPool.muSurr)
 detXXq2 = signXXq2 * np.exp(logdetXXq2)
