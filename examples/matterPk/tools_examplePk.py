@@ -335,7 +335,7 @@ def Comparison_errBars(gadPk, cvPk , k3D, nSamplesGad, nSamplesCV, lowBarGad, up
 
 def plotVarReduc_Cov(reducVar, reducVarDiag, sigmaReduc, sigmaReducDiag, sigmaReducApp ,nSamplesList ,k3D_binned):
     
-    A = plt.figure(figsize=(12,7.5))
+    plt.figure(figsize=(12,7.5))
     plt.semilogy(nSamplesList, reducVar, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
     plt.semilogy(nSamplesList, reducVarDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
     plt.xticks(fontsize=27, rotation = 0)
@@ -351,7 +351,7 @@ def plotVarReduc_Cov(reducVar, reducVarDiag, sigmaReduc, sigmaReducDiag, sigmaRe
     
     #%%Plot variance ratio on diagonal only
     
-    B = plt.figure(figsize=(12,7.5))
+    plt.figure(figsize=(12,7.5))
     plt.loglog(k3D_binned, sigmaReduc, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
     plt.loglog(k3D_binned, sigmaReducApp, linestyle = "dashed" , linewidth = 1.1, color = "grey", marker = "x", markersize = 4)
     plt.loglog(k3D_binned, sigmaReducDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
@@ -367,7 +367,7 @@ def plotVarReduc_Cov(reducVar, reducVarDiag, sigmaReduc, sigmaReducDiag, sigmaRe
 def plotVarReduc_new(reducVar, reducVarDiag, reducVarq, reducVarq2, sigmaReduc,
                      sigmaReducDiag, sigmaReducq, sigmaReducq2 ,nSamplesList,k3D_binned, q, q2):
     
-    A = plt.figure(figsize=(12,7.5))
+    plt.figure(figsize=(12,7.5))
     plt.semilogy(nSamplesList, reducVar, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
     plt.semilogy(nSamplesList, reducVarDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
     plt.semilogy(nSamplesList, reducVarq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "orangered", marker = "x", markersize  = 5)
@@ -385,7 +385,7 @@ def plotVarReduc_new(reducVar, reducVarDiag, reducVarq, reducVarq2, sigmaReduc,
     
     #%%Plot variance ratio on diagonal only
     
-    B = plt.figure(figsize=(12,7.5))
+    plt.figure(figsize=(12,7.5))
     plt.loglog(k3D_binned, sigmaReduc, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
     plt.loglog(k3D_binned, sigmaReducDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
     plt.loglog(k3D_binned, sigmaReducq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "orangered", marker = "x", markersize  = 5)

@@ -74,10 +74,8 @@ def plot_cvRatiosBlues(gadPDF, nSamplesGad, gadLow, gadUp, barBool, truePDF, cvT
     
     if trueBool:
         divider = truePDF
-        saveApp = "True"
     else:
         divider = gadPDF
-        saveApp = ""
     
     upErrG = factErr*(gadUp/divider - gadPDF/divider) * 100.0
     lowErrG = factErr*(gadPDF/divider - gadLow/divider) * 100.0
@@ -90,7 +88,6 @@ def plot_cvRatiosBlues(gadPDF, nSamplesGad, gadLow, gadUp, barBool, truePDF, cvT
     else:     
        lab1[1] = '{:>5}'.format(lab1[1])
     lab1[0] = '{:>3}'.format(lab1[0])
-    lab2 = ["GADGET","GADGET, Lion & Mouse"]
     lab1[0] = '{:>3}'.format(lab1[0])
     lab1.append(r'$95\%$')
     lab2 = ["GADGET","GADGET w/ CARPool ({} sets)".format(nTests)]
@@ -238,9 +235,9 @@ def Comparison_errBars(gadPDF, cvPDF, truth, od, nSamplesGad, nSamplesCV, lowBar
     plt.tight_layout()
     plt.show()
 
-def plotVarReduc_Cov(reducVar, reducVarDiag, sigmaReduc, sigmaReducDiag, sigmaReducApp ,nSamplesList ,k3D_binned):
+def plotVarReduc_Cov(reducVar, reducVarDiag, sigmaReduc, sigmaReducDiag, sigmaReducApp ,nSamplesList ,overdensity, nApp):
     
-    A = plt.figure(figsize=(12,7.5))
+    plt.figure(figsize=(12,7.5))
     plt.semilogy(nSamplesList, reducVar, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
     plt.semilogy(nSamplesList, reducVarDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
     plt.xticks(fontsize=27, rotation = 0)
@@ -256,33 +253,33 @@ def plotVarReduc_Cov(reducVar, reducVarDiag, sigmaReduc, sigmaReducDiag, sigmaRe
     
     #%%Plot variance ratio on diagonal only
     
-    B = plt.figure(figsize=(12,7.5))
-    plt.loglog(k3D_binned, sigmaReduc, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
-    plt.loglog(k3D_binned, sigmaReducApp, linestyle = "dashed" , linewidth = 1.1, color = "grey", marker = "x", markersize = 4)
-    plt.loglog(k3D_binned, sigmaReducDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
+    plt.figure(figsize=(12,7.5))
+    plt.loglog(overdensity, sigmaReduc, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
+    plt.loglog(overdensity, sigmaReducApp, label= "Univariate CARPool, %i samples"%nApp, linestyle = "dashed" , linewidth = 1.1, color = "grey", marker = "x", markersize = 4)
+    plt.loglog(overdensity, sigmaReducDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
     plt.xticks(fontsize=27, rotation = 0)
     plt.yticks(fontsize=27, rotation = 45)
     plt.xlabel(r'$\rho/\bar{\rho}$', fontsize = 32, style = "italic", y = -0.1)
     plt.ylabel(r"$\frac{\sigma_x}{\sigma_y}$", fontsize = 48, rotation = 0.0, labelpad = 27)
-    plt.legend(fontsize = 27, loc = "lower right")
+    plt.legend(fontsize = 27, loc = "upper right")
     plt.tight_layout()
     plt.grid()
     plt.show()
     
 def plotVarReduc_new(reducVar, reducVarDiag, reducVarq, reducVarq2, sigmaReduc,
-                     sigmaReducDiag, sigmaReducq, sigmaReducq2 ,nSamplesList,k3D_binned, q, q2):
+                     sigmaReducDiag, sigmaReducq, sigmaReducq2, sigmaReducApp, nSamplesList,overdensity, q, q2, qApp, nApp):
     
-    A = plt.figure(figsize=(12,7.5))
+    plt.figure(figsize=(12,7.5))
     plt.semilogy(nSamplesList, reducVar, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
     plt.semilogy(nSamplesList, reducVarDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
-    plt.semilogy(nSamplesList, reducVarq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "orangered", marker = "x", markersize  = 5)
-    plt.semilogy(nSamplesList, reducVarq2, label = "CARPool q=%i"%q2, linewidth = 1.1, color = "indigo", marker = "x", markersize  = 5)
+    plt.semilogy(nSamplesList, reducVarq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "red", marker = "x", markersize  = 5)
+    plt.semilogy(nSamplesList, reducVarq2, label = "CARPool q=%i"%q2, linewidth = 1.1, color = "orange", marker = "x", markersize  = 5)
     plt.xticks(fontsize=27, rotation = 0)
     plt.yticks(fontsize=27, rotation = 45)
     plt.xlabel("Number of simulation pairs", fontsize = 27, style = "italic", y = -0.1)
     plt.ylabel(r'$\frac{det \left(  \mathbf{\Sigma_{xx}}(\mathbf{\hat{\beta}})  \right)}{det \left(  \mathbf{\Sigma_{yy}} \right)}$', 
                         fontsize = 40, rotation = 90)
-    plt.legend(fontsize = 27, loc = "best")
+    plt.legend(fontsize = 24, loc = "best")
     plt.tight_layout()
     plt.grid()
     plt.show()
@@ -290,16 +287,17 @@ def plotVarReduc_new(reducVar, reducVarDiag, reducVarq, reducVarq2, sigmaReduc,
     
     #%%Plot variance ratio on diagonal only
     
-    B = plt.figure(figsize=(12,7.5))
-    plt.loglog(k3D_binned, sigmaReduc, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
-    plt.loglog(k3D_binned, sigmaReducDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
-    plt.loglog(k3D_binned, sigmaReducq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "orangered", marker = "x", markersize  = 5)
-    plt.loglog(k3D_binned, sigmaReducq2, label = "CARPool q=%i"%q2, linewidth = 1.1, color = "indigo", marker = "x", markersize  = 5)
+    plt.figure(figsize=(12,7.5))
+    plt.loglog(overdensity, sigmaReduc, label = "Multivariate CARPool", linewidth = 1.1, marker = "x", markersize = 5, color = "blue")
+    plt.loglog(overdensity, sigmaReducDiag, label = "Univariate CARPool", linewidth = 1.1, color = "black", marker = "x", markersize  = 5)
+    plt.loglog(overdensity, sigmaReducq, label = "CARPool q=%i"%q, linewidth = 1.1, color = "red", marker = "x", markersize  = 5)
+    plt.loglog(overdensity, sigmaReducq2, label = "CARPool q=%i"%q2, linewidth = 1.1, color = "orange", marker = "x", markersize  = 5)
+    plt.loglog(overdensity, sigmaReducApp, label = "CARPool q=%i, %i samples"%(qApp, nApp), linestyle = "dashed" , linewidth = 1.1, color = "grey", marker = "x", markersize = 4)
     plt.xticks(fontsize=27, rotation = 0)
     plt.yticks(fontsize=27, rotation = 45)
     plt.xlabel(r'$\rho/\bar{\rho}$', fontsize = 32, style = "italic", y = -0.1)
     plt.ylabel(r"$\frac{\sigma_x}{\sigma_y}$", fontsize = 48, rotation = 0.0, labelpad = 27)
-    plt.legend(fontsize = 27, loc = "lower right")
+    plt.legend(fontsize = 24, loc = "upper right")
     plt.tight_layout()
     plt.grid()
     plt.show()

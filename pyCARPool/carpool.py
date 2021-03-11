@@ -9,7 +9,9 @@ import numpy as np
 import math
 from scipy import stats
 from scipy import signal
+import scipy.linalg as scila
 import scikits.bootstrap as boot
+from sklearn.covariance import log_likelihood, empirical_covariance
 from tqdm import tqdm
 
 #%% DEFINITION OF THE CARPool class and the CARPoolTest inner class
@@ -272,7 +274,7 @@ class CARPool:
             '''
             
             S = int(self.P*(self.P + 1)/2) # number of unique elements in a (P,P) symmetric matrix
-            self.PSDBool = [] # list of booleans for positive semi-definiteness test
+            self.PDBool = [] # list of booleans for positive semi-definiteness test
             
             # Set functions that differ given the arguments
             testprint = print if self.verbose else lambda *a, **k: None
@@ -307,14 +309,9 @@ class CARPool:
                 
                 for k in range(self.nTests):
                     
-                    if self.Incremental == True:
-                        indStart = 0
-                        indEnd = self.Nsamples[k] # Nsmaples is an array of integers
-                        N = self.Nsamples[k]
-                    else:
-                        indStart = k * self.Nsamples # Nsamples is a single integer
-                        indEnd = (k + 1) * self.Nsamples
-                        N = self.Nsamples
+                    indStart = 0
+                    indEnd = self.Nsamples[k] # Nsmaples is an array of integers
+                    N = self.Nsamples[k]
                     
                     corr = N/(N-1.0) if corrBias else 1.0
                     
@@ -332,8 +329,8 @@ class CARPool:
                     muX = corr * uvCARPool_Mu(empSim, empSurr, vectMuC, beta)
                     self.covCARPool[:,k] = muX
                     
-                    psd = is_PSD(reconstruct(muX))
-                    self.PSDBool.append(psd)
+                    psd = is_PD(reconstruct(muX))
+                    self.PDBool.append(psd)
                     
                     # Estimate confidence intervals of estimated means if required
                     if methodCI != "None":
@@ -348,18 +345,13 @@ class CARPool:
             # Hybrid framework
             if self.p == 1 and self.q > 1:
                 
-                print("UNIVARIATE ESTIMATION")
+                print("HYBRID ESTIMATION")
                 
                 for k in range(self.nTests):
                     
-                    if self.Incremental == True:
-                        indStart = 0
-                        indEnd = self.Nsamples[k] # Nsmaples is an array of integers
-                        N = self.Nsamples[k]
-                    else:
-                        indStart = k * self.Nsamples # Nsamples is a single integer
-                        indEnd = (k + 1) * self.Nsamples
-                        N = self.Nsamples
+                    indStart = 0
+                    indEnd = self.Nsamples[k] # Nsmaples is an array of integers
+                    N = self.Nsamples[k]
                     
                     corr = N/(N-1.0) if corrBias else 1.0
                     
@@ -373,8 +365,8 @@ class CARPool:
                     self.covCARPool[:,k] = corr * muX
                     self.betaCovList.append(beta)
                     
-                    psd = is_PSD(reconstruct(muX))
-                    self.PSDBool.append(psd)
+                    psd = is_PD(reconstruct(muX))
+                    self.PDBool.append(psd)
                     
                     if methodCI != "None":
                         
@@ -387,7 +379,7 @@ class CARPool:
              
             testprint("TEST FINISHED FOR COVARIANCE")
             
-        def varianception(self, simData, surrData, covSurr, betaCovList, standardVec):
+        def varianception(self, simData, surrData, covSurr, standardVec):
             
             if self.nTests != len(self.betaCovList):
                 print("The number of beta matrices (for covariance) is not the same as nTests. Check consistency") 
@@ -413,6 +405,90 @@ class CARPool:
                 testprint("Variance of covariance, test %i over %i done"%(k + 1, self.nTests))
                 
             return sigma2Cov
+        
+        def logLH_GaussianTest(self, simData, testData):
+            
+            '''
+            Assuming comuteTest_Cov has been run
+            '''
+            
+            logLHSim = np.zeros((self.nTests,), dtype = np.float)
+            logLHCARP = np.zeros((self.nTests,), dtype = np.float)
+            
+            for n in range(self.nTests):
+                
+                # For the sample covariance of simulation samples
+                simCov = np.cov(simData[:,:self.Nsamples[n]], rowvar = True, bias = False)
+                logLHSim[n] = logLHCov_Gaussian(testData, simCov)
+            
+                # For the CAPool covariance
+                CARPCov = self.reconstructSymMat(self.covCARPool[:,n])
+                logLHCARP[n] = logLHCov_Gaussian(testData, CARPCov)
+                
+            return logLHCARP, logLHSim
+        
+            
+        def logLH_GaussianTestSkL(self, simData, testData):
+        
+            '''
+            Assuming comuteTest_Cov has been run (version using Scikit-Learn)
+            '''
+        
+            logLHSim = np.zeros((self.nTests,), dtype = np.float)
+            logLHCARP = np.zeros((self.nTests,), dtype = np.float)
+            
+            for n in range(self.nTests):
+                
+                N = self.Nsamples[n]
+                
+                # For the sample covariance of simulation samples
+                simCov = np.cov(simData[:,:N], rowvar = True, bias = True)
+                logLHSim[n] = logLHCov_GaussianSkL(testData, simCov)
+            
+                # For the CAPool covariance
+                CARPCov = self.reconstructSymMat(self.covCARPool[:,n]) * (N-1.0)/N # ML estimator, assuming corrBias = True
+                logLHCARP[n] = logLHCov_GaussianSkL(testData, CARPCov)
+                
+            return logLHCARP, logLHSim
+        
+        def shrinkCovariance(self, simData, surrData, covSurr, standardVec, Moscow_trials = False, Norm = "Frobenius"):
+            '''
+            Assuming comuteTest_Cov has been run
+            '''
+            
+            lambdas = np.zeros((self.nTests,), dtype = np.float)
+            P = self.covCARPool.shape[0]
+            
+            self.PDBool_shrunk = []
+            self.covCARPool_shrunk = np.zeros((P,self.nTests), dtype = np.float)
+            
+            reconstruct = reconstructSymMat if standardVec else customReconstructSymMat
+            vectorize = vectorizeSymMat if standardVec else customVectorizeSymMat
+            
+            for n in range(self.nTests):
+                    
+                N = self.Nsamples[n]
+                
+                if Moscow_trials:
+                    
+                    covMT = higham_nearPD(reconstruct(self.covCARPool[:,n]), matNorm = Norm, usePolar = True)
+                    
+                    lStar, shrunk = shrink_diagVariances_exact(vectorize(covMT), simData[:,:N], surrData[:,:N], 
+                                                               covSurr, self.p, self.q, self.betaCovList[n], standardVec)
+                    
+                else:
+                    
+                    lStar, shrunk = shrink_diagVariances_exact(self.covCARPool[:,n], simData[:,:N], surrData[:,:N], 
+                                                               covSurr, self.p, self.q, self.betaCovList[n], standardVec)
+                    
+                lambdas[n] = lStar
+                    
+                self.covCARPool_shrunk[:,n] = shrunk
+                self.PDBool_shrunk.append(is_PD(reconstruct(shrunk)))
+                    
+                    
+            return lambdas
+                        
 #%% ESTIMATION TOOLS
 
 ########################
@@ -857,7 +933,7 @@ def CARPoolSamples(simSamples, surrSamples, muSurr, p, q, beta):
     
     return xSamples
 
-#%% ADDITIONNAL TRICKS & TOOLS (TO BE UPDATED)
+#%% ADDITIONNAL TRICKS
 
 # Additional tools for p = q = 1
 # Smooth 1D numpy array
@@ -891,7 +967,7 @@ def smooth1D(sigArr, window_len, window):
     out = y[padd:padd+n]
     return out
 
-#%% SPECIFIC FUNCTIONS FOR COVARIANCE ESTIMATION (UNFINISHED, DO NOT USE)
+#%% SPECIFIC DATA & MATRIX TOOLS
 
 # Returns centered vector by their empirical mean
 def centeredData(dataMat):
@@ -983,7 +1059,11 @@ def customReconstructSymMat(vectSym):
     
     S = vectSym.shape[0]
     sols = np.roots([1.0, 1.0, -2.0 * S])
-    P = int(sols[np.where(sols>0)]) # we take the positive root of course
+    P = sols[np.where(sols>0)] # we take the positive root of course
+    P = int(round(P[0]))
+    # when 70., int sols gives actually 69 becase it's actually 69.999, to investigate
+    # if int(P*(P+1)/2)!=S:
+    #     P+=1
     
     indLow = customTrilIndices(np.tril_indices(P, k = 0),P)
     symMat = np.zeros((P,P), dtype = np.float)
@@ -996,6 +1076,10 @@ def customReconstructSymMat(vectSym):
 # "Normalize auto-covariance or cross-covariance matrix
 def covMat2CorrMat(covMat):
     
+    '''
+    Normalize the Covariance matrix so that every element is <= 1 (Cauchy-Schwarz)
+    '''
+    
     dCov = np.diag(np.diag(covMat))
     sigmaCov = np.sqrt(dCov)
     sigmaInv = np.linalg.inv(sigmaCov)
@@ -1003,10 +1087,160 @@ def covMat2CorrMat(covMat):
     
     return corrMat
 
+def cov2InvCorr(covMat):
+    
+    dCov = np.diag(np.diag(covMat))
+    sigmaCov = np.sqrt(dCov)
+    
+    prec = np.linalg.pinv(covMat, hermitian = True)
+    invR = np.linalg.multi_dot([sigmaCov, prec, sigmaCov])
+    
+    return invR
+
+def isSym(A, eps=1e-8):
+    return np.all(np.abs(A-A.T) < eps)
+
 # Check if a matrix is positive semi-definite
-def is_PSD(Mat):
-    return np.all(np.linalg.eigvals(Mat) >= 0)
+def is_PSD(symMat):
+    return np.all(np.linalg.eigvalsh(symMat) >= 0)
 
 # Check if a matrix is positive definite
-def is_PD(Mat):
-    return np.all(np.linalg.eigvals(Mat) > 0)
+def is_PD(symMat):
+    return np.all(np.linalg.eigvalsh(symMat) > 0)
+
+#%% Regularization
+
+def shrink_diagVariances_exact(vectCovCARP, simData,surrData, covSurr, p, q, beta, standardVec):
+    
+    N = simData.shape[1]
+    P = simData.shape[0]
+    S = int(P*(P+1)/2)
+    
+    # Set functions that differ given the arguments
+    vectorize = vectorizeSymMat if standardVec else customVectorizeSymMat
+    
+    # Covariance of surrogate
+    vectMuC = vectorize(covSurr)
+    
+    # Construct target matrix
+    variances = np.var(simData, axis = 1, dtype = np.float_, ddof = 1)
+    T = vectorize(np.diag(variances)) # target matrix, p estimated parameters
+     
+    # Construct CARPool samples (u_i samples)
+    simSamples = vectOuterProd(centeredData(simData), standardVec) # w_k : collection of N vectors of size P*(P+1)/2
+    surrSamples = vectOuterProd(centeredData(surrData),standardVec)
+    xColl = CARPoolSamples(simSamples, surrSamples, vectMuC, p, q, beta) #(S,N)
+    
+    # Construct target samples (t_i samples)
+    tData = centeredData(simData)
+    tV = tData * tData # (P,N)
+    tSamples = np.zeros((S,N), dtype = np.float) # (S,N)
+    
+    for n in range(N):
+        vect = vectorize(np.diag(tV[:,n]))
+        tSamples[:,n] = vect
+         
+    # Plays the role of the u_i samples --> for sum of var(u_i)
+    var_u = np.var(xColl, axis = 1, ddof = 1)
+    var_u = var_u * N/(np.power(N - 1.0, 2.0))
+    S_var_u = np.sum(var_u)
+    
+    # For sum of cov(t_i, u_i)
+    cov_tu = crossCovUni(xColl, tSamples)
+    cov_tu = cov_tu * N/(np.power(N - 1.0, 2.0))
+    S_cov_tu = np.sum(cov_tu)
+    
+    # For sum of (t_i - u_i)**2
+    diff2 = np.power(tSamples - xColl, 2.0)
+    S_diff2 = np.sum(diff2)
+
+    # Compute lambda star
+    lambdaStar = (S_var_u - S_cov_tu)/S_diff2
+    
+    shrinkMat = (1.0 - lambdaStar) * vectCovCARP + lambdaStar * T # vectorized !
+    
+    return lambdaStar, shrinkMat
+    
+    
+def higham_nearPD(symMat, matNorm = "Frobenius", usePolar = True):
+    
+    '''
+    Nearest positive-definite symmetric matrix for the Frobenius norm (Higham, 1988)
+    '''
+    
+    if not isSym(symMat):
+        raise ValueError("The input matrix must be symmetric")
+     
+    if matNorm == "Frobenius":
+        
+        if usePolar: 
+            _, H = scila.polar(symMat)
+        else:
+            _, S, V = np.linalg.svd(symMat, compute_uv = True, hermitian = True)
+            H = np.linalg.multi_dot((V.T, np.diag(S), V))
+        
+        X = (symMat + H)/2.0
+        
+        if is_PD(X):
+            print("Directly PD")
+            return X
+        
+        spacing = np.spacing(np.linalg.norm(symMat))
+        I = np.eye(symMat.shape[0])
+        k = 1
+        while not is_PD(X):
+            mineig = np.min(np.real(np.linalg.eigvalsh(X)))
+            X += I * (-mineig * k**2 + spacing)
+            k += 1
+    
+        return X
+        
+    elif matNorm == "spectral":
+        
+        eigens, _ = np.linalg.eigh(symMat)
+        negEv = eigens[np.where(eigens < 0.0)]
+        
+        r_star = - np.min(negEv)
+        
+        P = symMat + r_star * np.eye(symMat.shape[0])
+        
+        return P
+        
+def MoscowTrials(symMat):
+    '''
+    Set all negative eigenvalues of a symmetric matrix to 0
+    '''
+    print("Todo")
+    
+#%% Gaussian MV log-likelihood
+
+def logLHCov_Gaussian(testData, Sigma):
+    
+    N = testData.shape[1]
+    p = testData.shape[0]
+    testCent = centeredData(testData)
+    
+    (sign, logdet) = np.linalg.slogdet(Sigma)
+    
+    Prec = np.linalg.pinv(Sigma, hermitian = True)
+    
+    logLH = -0.5*N*p*np.log(2*np.pi) - 0.5*N*logdet
+    sumLH = 0.0
+    
+    for n in range(N):
+        sumLH += np.linalg.multi_dot((testCent[:,n].T, Prec, testCent[:,n]))
+    
+    logLH -= 0.5 * sumLH
+    
+    return logLH
+
+def logLHCov_GaussianSkL(testData, Sigma):
+    
+    Prec = np.linalg.pinv(Sigma, hermitian = True)
+    
+    empCov = empirical_covariance(testData.T)
+    
+    logLH = log_likelihood(empCov, Prec)
+    
+    return logLH
+    

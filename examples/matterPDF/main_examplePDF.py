@@ -126,11 +126,11 @@ xlog = True
 titleBool = False
 
 toolsPDF.plot_cvRatiosBlues(muY, nSampSim, lowY, upY, barBool, truth, testFix.muCARPool, stdBetaAdd,
-                 boolStd,cvStep, overdensity, factErrFix, percBool, trueBool,
+                 boolStd, NFix, overdensity, factErrFix, percBool, trueBool,
                  xlog, titleBool)
 
 #%% VIII) Performance for an increasing number of samples
-methodCIInc = "tscore"
+methodCIInc = "bootstrapPiv"
 
 testInc = myCARPool.createTest("Every 5 additional samples", cvStep, N, p, q, Incremental = True)
 testInc.smDict = {"smBool": True,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
@@ -138,8 +138,8 @@ testInc.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, met
 
 # Reproduce figure 2 of 2009.08970 (if methodCIInc = bootstrapBCA ; bootstrap results may slightly differ)
 # For figure B2, use methodCIInc = tscore
-nSampCARP = 50
-indCV = int(nSampCARP/cvStep) - 1
+nCARP = 50
+indCV = int(nCARP/cvStep) - 1
 factErrInc = 40
 zoomBool = False
 zoomFact = 3.50
@@ -148,7 +148,7 @@ xlog = True ; ylog = True
 tupleCor1 = (1,4)
 
 toolsPDF.Comparison_errBars(muY, testInc.muCARPool[:,indCV], truth, overdensity, nSampSim, 
-                        nSampCARP, lowY, upY, testInc.lowMeanCI[:,indCV], testInc.upMeanCI[:,indCV],
+                        nCARP, lowY, upY, testInc.lowMeanCI[:,indCV], testInc.upMeanCI[:,indCV],
                        factErrInc,zoomBool, odTupleLim,zoomFact, xlog, ylog)
 
 #%% Reproduce Figure 5 of 2009.08970
@@ -184,25 +184,46 @@ sigma2XXM, logdetXXM, signXXM = testInc_varM.varianceAnalysis(gad_varTest, cola_
 detXXM = signXXM * np.exp(logdetXXM/safeguard)
 reducVarM = np.power(detXXM/detYY, safeguard)
 
+# We take the best estimate of beta we have --> variance reduction to expect at best
 sigmaReducM = np.sqrt(sigma2XXM[:,-1])/sigYY
 sigmaReducU =  np.sqrt(sigma2XXU[:,-1])/sigYY # actual variance reduction we tend to
-sigmaReducUApp = np.sqrt(sigma2XXU[:,indCV])/sigYY # impact of an "improper" beta diagonal
 
-toolsPDF.plotVarReduc_Cov(reducVarM, reducVarU, sigmaReducM, sigmaReducU, sigmaReducUApp ,testInc_varM.Nsamples, overdensity)
+# "App" <--> approximate ; we take an "improper" beta to compare with the variance reduction of a "good" beta
+nApp = 30 # figure 10
+indApp  = int(nApp/cvStep) - 1
+sigmaReducUApp = np.sqrt(sigma2XXU[:,indApp])/sigYY # impact of an "improper" 
+
+toolsPDF.plotVarReduc_Cov(reducVarM, reducVarU, sigmaReducM, sigmaReducU, sigmaReducUApp ,testInc_varM.Nsamples, overdensity, nApp)
 
 #%% VI) New test with q = 3
 q2 = 3
+meth_q2 = "bootstrapPiv"
+
 testInc_q2 = myCARPool.createTest("Every 5 additional samples, q = 3", cvStep, NInc2, p, q2, Incremental = True)
 testInc_q2.smDict = {"smBool": False ,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
-testInc_q2.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, "tscore", alpha)
+testInc_q2.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, meth_q2, alpha)
 
+nCARP_q2 = 40
+indCV_q2 = int(nCARP_q2/cvStep) - 1
+
+toolsPDF.Comparison_errBars(muY, testInc_q2.muCARPool[:,indCV_q2], truth, overdensity, nSampSim, 
+                        nCARP_q2, lowY, upY, testInc.lowMeanCI[:,indCV_q2], testInc.upMeanCI[:,indCV_q2],
+                       factErrInc,zoomBool, odTupleLim,zoomFact, xlog, ylog)
 
 #%% VII) New test with q = 5
-
 q3 = 5
+meth_q3 = "bootstrapPiv"
+
 testInc_q3 = myCARPool.createTest("Every 5 additional samples, q = 5", cvStep, NInc2, p, q3, Incremental = True)
 testInc_q3.smDict = {"smBool": False ,"wname":wname, "wlen": wlen, "indSmooth":indSmoothing}
-testInc_q3.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, "tscore", alpha)
+testInc_q3.computeTest(myCARPool.simData, myCARPool.surrData, myCARPool.muSurr, meth_q3, alpha)
+
+nCARP_q3 = 40
+indCV_q3 = int(nCARP_q3/cvStep) - 1
+
+toolsPDF.Comparison_errBars(muY, testInc_q2.muCARPool[:,indCV_q3], truth, overdensity, nSampSim, 
+                        nCARP_q3, lowY, upY, testInc.lowMeanCI[:,indCV_q3], testInc.upMeanCI[:,indCV_q3],
+                       factErrInc,zoomBool, odTupleLim,zoomFact, xlog, ylog)
 
 #%% VIII) Extended variance analysis
 
@@ -214,8 +235,14 @@ sigma2XXq3, logdetXXq3, signXXq3 = testInc_q3.varianceAnalysis(gad_varTest, cola
 detXXq3 = signXXq3 * np.exp(logdetXXq3/safeguard)
 reducVarq3 = np.power(detXXq3/detYY, safeguard)
 
+# We take the best estimate of beta we have --> variance reduction to expect at best
 sigmaReducq2 = np.sqrt(sigma2XXq2[:,-1])/sigYY
 sigmaReducq3 =  np.sqrt(sigma2XXq3[:,-1])/sigYY
 
+nApp_q = 30 # beta diagonal with 10 samples, as in 2009.08970 figure 10
+indApp_q  = int(nApp_q/cvStep) - 1
+sigmaReducApp_q = np.sqrt(sigma2XXq2[:,indApp_q])/sigYY # impact of an "improper"
+qApp = q2
+
 toolsPDF.plotVarReduc_new(reducVarM, reducVarU, reducVarq2,reducVarq3, sigmaReducM,
-                         sigmaReducU,sigmaReducq2, sigmaReducq3, testInc_q2.Nsamples, overdensity, q2, q3)
+                         sigmaReducU,sigmaReducq2, sigmaReducq3, sigmaReducApp_q, testInc_q2.Nsamples, overdensity, q2, q3, qApp, nApp_q)
